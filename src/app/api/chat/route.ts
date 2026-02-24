@@ -54,6 +54,34 @@ async function atCreate(table: string, fields: Record<string, unknown>) {
   });
 }
 
+const EXERCISE_ALIASES: [RegExp, string][] = [
+  [/^push[\s-]?ups?$/i, 'push-ups'],
+  [/^pull[\s-]?ups?$/i, 'pull-ups'],
+  [/^sit[\s-]?ups?$/i, 'sit-ups'],
+  [/^chin[\s-]?ups?$/i, 'chin-ups'],
+  [/^dips?$/i, 'dips'],
+  [/^squats?$/i, 'squats'],
+  [/^lunges?$/i, 'lunges'],
+  [/^burpees?$/i, 'burpees'],
+  [/^planks?$/i, 'plank'],
+  [/^deadlifts?$/i, 'deadlifts'],
+  [/^bench[\s-]?press(es)?$/i, 'bench press'],
+  [/^running|runs?$/i, 'running'],
+  [/^cycling|biking|bike$/i, 'cycling'],
+  [/^walking|walks?$/i, 'walking'],
+  [/^swimming|swims?$/i, 'swimming'],
+  [/^strength[\s-]?training|strength$/i, 'strength training'],
+  [/^cardio$/i, 'cardio'],
+];
+
+function normalizeExerciseType(raw: string): string {
+  const trimmed = raw.trim().toLowerCase();
+  for (const [pattern, canonical] of EXERCISE_ALIASES) {
+    if (pattern.test(trimmed)) return canonical;
+  }
+  return trimmed;
+}
+
 async function atPatch(table: string, recordId: string, fields: Record<string, unknown>) {
   await fetch(`https://api.airtable.com/v0/${AT_BASE}/${encodeURIComponent(table)}`, {
     method: 'PATCH',
@@ -78,7 +106,7 @@ export async function POST(req: NextRequest) {
     const workoutLogs: { fields: { type?: string; duration?: number; reps?: number } }[] = workoutLogsResp.records ?? [];
     const workoutTotals: Record<string, { duration: number; reps: number }> = {};
     workoutLogs.forEach((r) => {
-      const type = r.fields.type || 'general';
+      const type = normalizeExerciseType(r.fields.type || 'general');
       if (!workoutTotals[type]) workoutTotals[type] = { duration: 0, reps: 0 };
       workoutTotals[type].duration += r.fields.duration || 0;
       workoutTotals[type].reps += r.fields.reps || 0;
@@ -171,10 +199,11 @@ DATA TAGGING - append silently at the END of your response:
     const logPromises: Promise<void>[] = [];
 
     if (workoutData) {
+      workoutData.type = normalizeExerciseType(workoutData.type ?? 'general');
       logPromises.push(atCreate('WorkoutLogs', {
         userId,
         date: today,
-        type: workoutData.type ?? 'general',
+        type: workoutData.type,
         details: cleanMessage.substring(0, 300),
         duration: parseInt(workoutData.duration ?? '0') || 0,
         reps: parseInt(workoutData.reps ?? '0') || 0,
