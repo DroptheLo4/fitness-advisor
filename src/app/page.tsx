@@ -1,7 +1,7 @@
 'use client';
 import { useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Message, UserProfile, Achievement } from '@/types';
+import { Message, UserProfile, Achievement, WorkoutTotal } from '@/types';
 import { sendMessage } from '@/lib/n8n';
 import ProfileSidebar from '@/components/ProfileSidebar';
 import ChatWindow from '@/components/ChatWindow';
@@ -17,6 +17,7 @@ export default function Home() {
   const [lastXP, setLastXP] = useState(0);
   const [levelUp, setLevelUp] = useState(false);
   const [achievement, setAchievement] = useState<Achievement | null>(null);
+  const [workoutTotals, setWorkoutTotals] = useState<Record<string, WorkoutTotal>>({});
 
   const handleSend = useCallback(async (text: string) => {
     const userMsg: Message = { id: uuidv4(), role: 'user', content: text, timestamp: new Date() };
@@ -40,6 +41,7 @@ export default function Home() {
       setProfile(response.profile);
       setLastXP(response.xpGained);
       setLevelUp(response.levelUp);
+      if (response.workoutTotals) setWorkoutTotals(response.workoutTotals);
 
       if (response.newAchievement) {
         setAchievement(response.newAchievement);
@@ -60,7 +62,7 @@ export default function Home() {
 
   return (
     <main className="flex h-screen bg-[#0d0d0d] overflow-hidden">
-      <ProfileSidebar profile={profile} lastXP={lastXP} levelUp={levelUp} />
+      <ProfileSidebar profile={profile} lastXP={lastXP} levelUp={levelUp} workoutTotals={workoutTotals} />
       <ChatWindow messages={messages} onSend={handleSend} isLoading={isLoading} />
       <AchievementToast achievement={achievement} onDismiss={() => setAchievement(null)} />
     </main>

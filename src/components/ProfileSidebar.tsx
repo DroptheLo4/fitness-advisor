@@ -1,6 +1,6 @@
 'use client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserProfile } from '@/types';
+import { UserProfile, WorkoutTotal } from '@/types';
 import XPBar from './XPBar';
 import StreakCounter from './StreakCounter';
 import { getLevelProgress } from '@/lib/n8n';
@@ -9,6 +9,7 @@ interface ProfileSidebarProps {
   profile: UserProfile;
   lastXP: number;
   levelUp: boolean;
+  workoutTotals: Record<string, WorkoutTotal>;
 }
 
 const BADGE_ICONS: Record<string, string> = {
@@ -22,7 +23,7 @@ const BADGE_ICONS: Record<string, string> = {
   'Level 10': '🌟',
 };
 
-export default function ProfileSidebar({ profile, lastXP, levelUp }: ProfileSidebarProps) {
+export default function ProfileSidebar({ profile, lastXP, levelUp, workoutTotals }: ProfileSidebarProps) {
   const progress = getLevelProgress(profile.totalXP, profile.level);
 
   return (
@@ -64,6 +65,42 @@ export default function ProfileSidebar({ profile, lastXP, levelUp }: ProfileSide
       <div className="bg-[#111] border border-[#1e1e1e] rounded-xl p-4">
         <StreakCounter streak={profile.currentStreak} />
       </div>
+
+      {/* Workout Totals */}
+      {Object.keys(workoutTotals).length > 0 && (
+        <div>
+          <p className="text-[10px] text-[#555] uppercase tracking-widest mb-3">Workout Totals</p>
+          <div className="flex flex-col gap-2">
+            {Object.entries(workoutTotals).map(([exercise, { duration, reps }]) => {
+              const label = reps > 0 ? `${reps} reps` : `${duration} min`;
+              const maxVal = Math.max(...Object.values(workoutTotals).map(t => t.reps > 0 ? t.reps : t.duration));
+              const thisVal = reps > 0 ? reps : duration;
+              const pct = maxVal > 0 ? (thisVal / maxVal) * 100 : 0;
+              return (
+                <motion.div
+                  key={exercise}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="flex flex-col gap-1"
+                >
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-xs text-[#aaa] capitalize">{exercise}</span>
+                    <span className="text-xs font-black text-[#ff6b00] font-mono">{label}</span>
+                  </div>
+                  <div className="h-0.5 w-full bg-[#1e1e1e] rounded-full overflow-hidden">
+                    <motion.div
+                      className="h-full bg-[#ff6b00] rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pct}%` }}
+                      transition={{ duration: 0.4 }}
+                    />
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Badges */}
       <div className="flex-1">

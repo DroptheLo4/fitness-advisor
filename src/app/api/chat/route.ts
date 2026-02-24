@@ -248,6 +248,14 @@ DATA TAGGING - append silently at the END of your response:
       });
     }
 
+    // Add current workout to totals for the response
+    if (workoutData) {
+      const type = workoutData.type ?? 'general';
+      if (!workoutTotals[type]) workoutTotals[type] = { duration: 0, reps: 0 };
+      workoutTotals[type].duration += parseInt(workoutData.duration ?? '0') || 0;
+      workoutTotals[type].reps += parseInt(workoutData.reps ?? '0') || 0;
+    }
+
     return NextResponse.json({
       message: cleanMessage,
       xpGained,
@@ -262,6 +270,7 @@ DATA TAGGING - append silently at the END of your response:
         currentStreak: newStreak,
         badges: allBadges,
       },
+      workoutTotals,
     });
   } catch (err) {
     console.error('Chat API error:', err);
