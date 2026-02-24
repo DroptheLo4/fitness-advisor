@@ -75,17 +75,17 @@ export async function POST(req: NextRequest) {
     const profileRecord = profileResp.records?.[0];
 
     // Compute cumulative totals per exercise type
-    const workoutLogs: { fields: { type?: string; duration?: number } }[] = workoutLogsResp.records ?? [];
-    const workoutTotals: Record<string, { duration: number; sessions: number }> = {};
+    const workoutLogs: { fields: { type?: string; duration?: number; reps?: number } }[] = workoutLogsResp.records ?? [];
+    const workoutTotals: Record<string, { duration: number; reps: number }> = {};
     workoutLogs.forEach((r) => {
       const type = r.fields.type || 'general';
-      if (!workoutTotals[type]) workoutTotals[type] = { duration: 0, sessions: 0 };
+      if (!workoutTotals[type]) workoutTotals[type] = { duration: 0, reps: 0 };
       workoutTotals[type].duration += r.fields.duration || 0;
-      workoutTotals[type].sessions += 1;
+      workoutTotals[type].reps += r.fields.reps || 0;
     });
     const workoutSummary = Object.entries(workoutTotals)
-      .map(([t, { duration, sessions }]) =>
-        duration > 0 ? `${t}: ${duration} min (${sessions} sessions)` : `${t}: ${sessions} sessions`
+      .map(([t, { duration, reps }]) =>
+        reps > 0 ? `${t}: ${reps} reps total` : `${t}: ${duration} min total`
       )
       .join(', ') || 'none yet';
     const pf = {
@@ -116,11 +116,11 @@ CUMULATIVE WORKOUT TOTALS (logged before this session):
 ${workoutSummary}
 
 When confirming a logged workout, add the new activity to the existing total and state the updated number.
-For time-based exercises (running, cycling, etc.) show total minutes. For rep-based exercises (push-ups, squats, etc.) show total sessions.
+For time-based exercises show total minutes. For rep-based exercises show total reps.
 
 DATA TAGGING - append silently at the END of your response:
-- Time-based workout: append [WORKOUT: type=X, duration=Xmin]
-- Rep-based workout (push-ups, squats, etc.): append [WORKOUT: type=X, duration=0min]
+- Time-based workout (running, cycling, etc.): append [WORKOUT: type=X, duration=Xmin, reps=0]
+- Rep-based workout (push-ups, squats, pull-ups, etc.): append [WORKOUT: type=X, duration=0min, reps=X]
 - Meal mentioned: append [MEAL: type=X, calories=X]
 - Goal set: append [GOAL: type=X, description=X]`;
 
@@ -170,6 +170,7 @@ DATA TAGGING - append silently at the END of your response:
         type: workoutData.type ?? 'general',
         details: cleanMessage.substring(0, 300),
         duration: parseInt(workoutData.duration ?? '0') || 0,
+        reps: parseInt(workoutData.reps ?? '0') || 0,
         xpEarned: 50,
       }));
     }
