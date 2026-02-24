@@ -40,6 +40,12 @@ async function atGet(table: string, formula: string) {
   return res.json();
 }
 
+async function atGetAll(table: string, formula: string) {
+  const url = `https://api.airtable.com/v0/${AT_BASE}/${encodeURIComponent(table)}?filterByFormula=${encodeURIComponent(formula)}&maxRecords=100`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${AT_TOKEN}` } });
+  return res.json();
+}
+
 async function atCreate(table: string, fields: Record<string, unknown>) {
   await fetch(`https://api.airtable.com/v0/${AT_BASE}/${encodeURIComponent(table)}`, {
     method: 'POST',
@@ -61,9 +67,23 @@ export async function POST(req: NextRequest) {
     const { userId = 'user_default', sessionId, message } = await req.json();
     const today = new Date().toISOString().split('T')[0];
 
-    // 1. Fetch user profile
-    const profileResp = await atGet('UserProfile', `{userId} = "${userId}"`);
+    // 1. Fetch user profile + workout history in parallel
+    const [profileResp, workoutLogsResp] = await Promise.all([
+      atGet('UserProfile', `{userId} = "${userId}"`),
+      atGetAll('WorkoutLogs', `{userId} = "${userId}"`),
+    ]);
     const profileRecord = profileResp.records?.[0];
+
+    // Compute cumulative totals per exercise type
+    const workoutLogs: { fields: { type?: string; duration?: number } }[] = workoutLogsResp.records ?? [];
+    const workoutTotals: Record<string, number> = {};
+    workoutLogs.forEach((r) => {
+      const type = r.fields.type || 'general';
+      workoutTotals[type] = (workoutTotals[type] || 0) + (r.fields.duration || 0);
+    });
+    const workoutSummary = Object.entries(workoutTotals)
+      .map(([t, m]) => `${t}: ${m} min`)
+      .join(', ') || 'none yet';
     const pf = {
       recordId: profileRecord?.id ?? null,
       displayName: profileRecord?.fields?.displayName ?? 'Athlete',
@@ -77,19 +97,22 @@ export async function POST(req: NextRequest) {
     let badgeList: string[] = [];
     try { badgeList = JSON.parse(pf.badges); } catch { badgeList = []; }
 
-    const systemPrompt = `You are FitBot, a motivating personal fitness coach. Be concise, warm, and specific.
+    const systemPrompt = `You are FitBot, an evidence-based AI fitness assistant. Ground all advice in sports science and peer-reviewed research. Be concise and specific — cite the principle or mechanism behind recommendations (e.g., progressive overload, EPOC, protein synthesis window).
 
 USER PROFILE:
 - Name: ${pf.displayName}
 - Level: ${pf.level} | XP: ${pf.totalXP} | Streak: ${pf.currentStreak} days
 - Badges earned: ${badgeList.join(', ') || 'none yet'}
 
+CUMULATIVE WORKOUT TOTALS:
+${workoutSummary}
+
 YOUR RESPONSIBILITIES:
-1. Have natural fitness conversations and give personalized advice
-2. When the user logs a workout, confirm it enthusiastically
-3. When the user mentions food/meals, acknowledge their nutrition
-4. Celebrate streaks, milestones, and personal bests
-5. Suggest improvements and next steps
+1. Answer fitness questions with research-backed explanations — explain the "why" behind each recommendation
+2. When the user logs a workout, confirm it and state their updated cumulative total for that exercise type
+3. When the user mentions food/meals, give evidence-based nutritional context
+4. Reference their workout history when relevant (volume progression, recovery, periodization)
+5. Suggest next steps grounded in research
 
 DATA TAGGING - append silently at the END of your response when applicable:
 - Workout mentioned: append [WORKOUT: type=X, duration=Xmin]
