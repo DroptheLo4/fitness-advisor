@@ -76,13 +76,17 @@ export async function POST(req: NextRequest) {
 
     // Compute cumulative totals per exercise type
     const workoutLogs: { fields: { type?: string; duration?: number } }[] = workoutLogsResp.records ?? [];
-    const workoutTotals: Record<string, number> = {};
+    const workoutTotals: Record<string, { duration: number; sessions: number }> = {};
     workoutLogs.forEach((r) => {
       const type = r.fields.type || 'general';
-      workoutTotals[type] = (workoutTotals[type] || 0) + (r.fields.duration || 0);
+      if (!workoutTotals[type]) workoutTotals[type] = { duration: 0, sessions: 0 };
+      workoutTotals[type].duration += r.fields.duration || 0;
+      workoutTotals[type].sessions += 1;
     });
     const workoutSummary = Object.entries(workoutTotals)
-      .map(([t, m]) => `${t}: ${m} min`)
+      .map(([t, { duration, sessions }]) =>
+        duration > 0 ? `${t}: ${duration} min (${sessions} sessions)` : `${t}: ${sessions} sessions`
+      )
       .join(', ') || 'none yet';
     const pf = {
       recordId: profileRecord?.id ?? null,
@@ -97,25 +101,26 @@ export async function POST(req: NextRequest) {
     let badgeList: string[] = [];
     try { badgeList = JSON.parse(pf.badges); } catch { badgeList = []; }
 
-    const systemPrompt = `You are FitBot, an evidence-based AI fitness assistant. Ground all advice in sports science and peer-reviewed research. Be concise and specific — cite the principle or mechanism behind recommendations (e.g., progressive overload, EPOC, protein synthesis window).
+    const systemPrompt = `You are FitBot, an evidence-based AI fitness assistant. Ground all advice in sports science research. Never include citations, references, or source names.
+
+RESPONSE LENGTH RULES:
+- If the user is logging an activity (not asking a question): respond in 1-2 sentences max — confirm the log and state their updated cumulative total for that exercise type.
+- If the user asks a fitness question: give a concise, research-backed answer explaining the key principle. No more than 3-4 sentences.
 
 USER PROFILE:
 - Name: ${pf.displayName}
 - Level: ${pf.level} | XP: ${pf.totalXP} | Streak: ${pf.currentStreak} days
 - Badges earned: ${badgeList.join(', ') || 'none yet'}
 
-CUMULATIVE WORKOUT TOTALS:
+CUMULATIVE WORKOUT TOTALS (logged before this session):
 ${workoutSummary}
 
-YOUR RESPONSIBILITIES:
-1. Answer fitness questions with research-backed explanations — explain the "why" behind each recommendation
-2. When the user logs a workout, confirm it and state their updated cumulative total for that exercise type
-3. When the user mentions food/meals, give evidence-based nutritional context
-4. Reference their workout history when relevant (volume progression, recovery, periodization)
-5. Suggest next steps grounded in research
+When confirming a logged workout, add the new activity to the existing total and state the updated number.
+For time-based exercises (running, cycling, etc.) show total minutes. For rep-based exercises (push-ups, squats, etc.) show total sessions.
 
-DATA TAGGING - append silently at the END of your response when applicable:
-- Workout mentioned: append [WORKOUT: type=X, duration=Xmin]
+DATA TAGGING - append silently at the END of your response:
+- Time-based workout: append [WORKOUT: type=X, duration=Xmin]
+- Rep-based workout (push-ups, squats, etc.): append [WORKOUT: type=X, duration=0min]
 - Meal mentioned: append [MEAL: type=X, calories=X]
 - Goal set: append [GOAL: type=X, description=X]`;
 
